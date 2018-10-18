@@ -1,6 +1,4 @@
-const jq = require('jsonpath');
 const iconv = require('iconv-lite');
-const { query: queryXPath } = require('insomnia-xpath');
 
 module.exports.templateTags = [
   {
@@ -12,11 +10,6 @@ module.exports.templateTags = [
         displayName: 'Attribute',
         type: 'enum',
         options: [
-          {
-            displayName: 'Body Attribute',
-            description: 'value of response body',
-            value: 'body'
-          },
           {
             displayName: 'Raw Body',
             description: 'entire response body',
@@ -36,17 +29,8 @@ module.exports.templateTags = [
       },
       {
         type: 'string',
-        hide: args => args[0].value === 'raw',
-        displayName: args => {
-          switch (args[0].value) {
-            case 'body':
-              return 'Filter (JSONPath or XPath)';
-            case 'header':
-              return 'Header Name';
-            default:
-              return 'Filter';
-          }
-        }
+        hide: args => args[0].value !== 'header',
+        displayName: 'Header Name'
       },
       {
         type: 'string',
@@ -59,7 +43,7 @@ module.exports.templateTags = [
     async run(context, field, id, filter, js) {
       filter = filter || '';
 
-      if (!['body', 'header', 'raw'].includes(field)) {
+      if (!['header', 'raw'].includes(field)) {
         throw new Error(`Invalid response field ${field}`);
       }
 
@@ -82,11 +66,11 @@ module.exports.templateTags = [
         throw new Error('No successful responses for request');
       }
 
-      if (field !== 'raw' && !filter) {
+      const sanitizedFilter = filter.trim();
+
+      if (field === 'header' && !sanitizedFilter) {
         throw new Error(`No ${field} filter specified`);
       }
-
-      const sanitizedFilter = filter.trim();
 
       let output = ''
       if (field === 'header') {
@@ -102,25 +86,6 @@ module.exports.templateTags = [
         } catch (err) {
           console.warn('[response] Failed to decode body', err);
           output = bodyBuffer.toString();
-        }
-      } else if (field === 'body') {
-        const bodyBuffer = context.util.models.response.getBodyBuffer(response, '');
-        const match = response.contentType.match(/charset=([\w-]+)/);
-        const charset = match && match.length >= 2 ? match[1] : 'utf-8';
-
-        // Sometimes iconv conversion fails so fallback to regular buffer
-        let body;
-        try {
-          body = iconv.decode(bodyBuffer, charset);
-        } catch (err) {
-          body = bodyBuffer.toString();
-          console.warn('[response] Failed to decode body', err);
-        }
-
-        if (sanitizedFilter.indexOf('$') === 0) {
-          output = matchJSONPath(body, sanitizedFilter);
-        } else {
-          output = matchXPath(body, sanitizedFilter);
         }
       } else {
         throw new Error(`Unknown field ${field}`);
@@ -139,47 +104,6 @@ module.exports.templateTags = [
     }
   }
 ];
-
-function matchJSONPath(bodyStr, query) {
-  let body;
-  let results;
-
-  try {
-    body = JSON.parse(bodyStr);
-  } catch (err) {
-    throw new Error(`Invalid JSON: ${err.message}`);
-  }
-
-  try {
-    results = jq.query(body, query);
-  } catch (err) {
-    throw new Error(`Invalid JSONPath query: ${query}`);
-  }
-
-  if (results.length === 0) {
-    throw new Error(`Returned no results: ${query}`);
-  } else if (results.length > 1) {
-    throw new Error(`Returned more than one result: ${query}`);
-  }
-
-  if (typeof results[0] !== 'string') {
-    return JSON.stringify(results[0]);
-  } else {
-    return results[0];
-  }
-}
-
-function matchXPath(bodyStr, query) {
-  const results = queryXPath(bodyStr, query);
-
-  if (results.length === 0) {
-    throw new Error(`Returned no results: ${query}`);
-  } else if (results.length > 1) {
-    throw new Error(`Returned more than one result: ${query}`);
-  }
-
-  return results[0].inner;
-}
 
 function matchHeader(headers, name) {
   if (!headers.length) {
