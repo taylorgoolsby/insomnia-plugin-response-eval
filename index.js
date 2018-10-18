@@ -2,7 +2,7 @@ const iconv = require('iconv-lite');
 
 module.exports.templateTags = [
   {
-    name: 'response-eval',
+    name: 'ResponseEval',
     displayName: 'Response Eval',
     description: "reference values from other request's responses and then run JS on the output.",
     args: [
