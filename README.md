@@ -6,4 +6,4 @@ You can think of this as a combination of [`insomnia-plugin-response`](https://w
 Install the `insomnia-plugin-response-eval` plugin from Preferences > Plugins.
 
 ## Usage
-Todo
+![example](example.png)
