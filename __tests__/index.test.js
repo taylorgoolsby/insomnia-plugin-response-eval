@@ -147,7 +147,7 @@ describe('Response tag', () => {
 
       const context = _genTestContext(requests, responses);
       const result = await tag.run(context, 'raw', 'req_1', '', '');
-      
+
       expect(result).toBe('{"foo": "bar"}');
     })
   });

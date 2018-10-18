@@ -1,6 +1,6 @@
 {
   "name": "insomnia-plugin-response-eval",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "author": "Taylor Goolsby <taylorgoolsby@users.noreply.github.com>",
   "description": "Insomnia response template tag with JS eval",
   "license": "MIT",
