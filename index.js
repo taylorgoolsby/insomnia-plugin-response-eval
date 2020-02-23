@@ -34,6 +34,7 @@ module.exports.templateTags = [
       },
       {
         type: 'string',
+        encoding: 'base64',
         displayName: 'JavaScript Code',
         description: 'The variable named `output` contains the output of the original response template tag.',
         placeholder: 'output'
