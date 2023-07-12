@@ -9,25 +9,9 @@ module.exports.templateTags = [
     description: "reference values from other request's responses and then run JS on the output.",
     args: [
       {
-        displayName: 'Attribute',
-        type: 'enum',
-        options: [
-          {
-            displayName: 'Raw Body',
-            description: 'entire response body',
-            value: 'raw'
-          },
-          {
-            displayName: 'Header',
-            description: 'value of response header',
-            value: 'header'
-          }
-        ]
-      },
-      {
         displayName: 'Request',
         type: 'model',
-        model: 'Request'
+        model: 'Request',
       },
       {
         displayName: 'Trigger Behavior',
@@ -58,9 +42,14 @@ module.exports.templateTags = [
         ],
       },
       {
-        type: 'string',
-        hide: args => args[0].value !== 'header',
-        displayName: 'Header Name'
+        displayName: 'Max age (seconds)',
+        help: 'The maximum age of a response to use before it expires',
+        type: 'number',
+        hide: args => {
+          const triggerBehavior = (args[3] && args[3].value) || defaultTriggerBehaviour;
+          return triggerBehavior !== 'when-expired';
+        },
+        defaultValue: 60,
       },
       {
         type: 'string',
@@ -71,13 +60,8 @@ module.exports.templateTags = [
       }
     ],
 
-    async run(context, field, id, filter, resendBehavior, js) {
-      filter = filter || '';
+    async run(context, id, resendBehavior, maxAgeSeconds, js) {
       resendBehavior = (resendBehavior || defaultTriggerBehaviour).toLowerCase();
-
-      if (!['header', 'raw'].includes(field)) {
-        throw new Error(`Invalid response field ${field}`);
-      }
 
       if (!id) {
         throw new Error('No request specified');
@@ -87,6 +71,9 @@ module.exports.templateTags = [
       if (!request) {
         throw new Error(`Could not find request ${id}`);
       }
+
+      const environmentId = context.context.getEnvironmentId();
+      let response = await context.util.models.response.getLatestForRequestId(id, environmentId);
 
       let shouldResend = false;
       switch (resendBehavior) {
@@ -114,47 +101,49 @@ module.exports.templateTags = [
 
       }
 
-      if (shouldResend && context.renderPurpose === 'send') {
-        console.log('[response eval] Resending dependency');
-        response = await context.network.sendRequest(request);
+      // Make sure we only send the request once per render so we don't have infinite recursion
+      const requestChain = context.context.getExtraInfo('requestChain') || [];
+      if (requestChain.some(id => id === request._id)) {
+        console.log('[response eval] Preventing recursive render');
+        shouldResend = false;
       }
 
-      const response = await context.util.models.response.getLatestForRequestId(id);
+      if (shouldResend && context.renderPurpose === 'send') {
+        console.log('[response eval] Resending dependency');
+        requestChain.push(request._id)
+        response = await context.network.sendRequest(request, [
+          { name: 'requestChain', value: requestChain }
+        ]);
+      }
 
       if (!response) {
+        console.log('[response eval] No response found');
         throw new Error('No responses for request');
       }
 
+      if (response.error) {
+        console.log('[response eval] Response error ' + response.error);
+        throw new Error('Failed to send dependent request ' + response.error);
+      }
+
       if (!response.statusCode) {
+        console.log('[response eval] Invalid status code ' + response.statusCode);
         throw new Error('No successful responses for request');
       }
 
-      const sanitizedFilter = filter.trim();
+      const bodyBuffer = context.util.models.response.getBodyBuffer(response, '');
+      const match = response.contentType && response.contentType.match(/charset=([\w-]+)/);
+      const charset = match && match.length >= 2 ? match[1] : 'utf-8';
 
-      if (field === 'header' && !sanitizedFilter) {
-        throw new Error(`No ${field} filter specified`);
+      let body;
+      try {
+        body = iconv.decode(bodyBuffer, charset);
+      } catch (err) {
+        console.warn('[response eval] Failed to decode body', err);
+        body = bodyBuffer.toString();
       }
 
-      let output = ''
-      if (field === 'header') {
-        output = matchHeader(response.headers, sanitizedFilter);
-      } else if (field === 'raw') {
-        const bodyBuffer = context.util.models.response.getBodyBuffer(response, '');
-        const match = response.contentType.match(/charset=([\w-]+)/);
-        const charset = match && match.length >= 2 ? match[1] : 'utf-8';
-
-        // Sometimes iconv conversion fails so fallback to regular buffer
-        try {
-          output = iconv.decode(bodyBuffer, charset);
-        } catch (err) {
-          console.warn('[response eval] Failed to decode body', err);
-          output = bodyBuffer.toString();
-        }
-      } else {
-        throw new Error(`Unknown field ${field}`);
-      }
-
-      let r = output
+      let r = body;
       if (js) {
         try {
           r = await eval(`(async () => { return ${js} })`)();
@@ -163,22 +152,7 @@ module.exports.templateTags = [
         }
       }
 
-      return r
-    }
-  }
+      return r;
+    },
+  },
 ];
-
-function matchHeader(headers, name) {
-  if (!headers.length) {
-    throw new Error(`No headers available`);
-  }
-
-  const header = headers.find(h => h.name.toLowerCase() === name.toLowerCase());
-
-  if (!header) {
-    const names = headers.map(c => `"${c.name}"`).join(',\n\t');
-    throw new Error(`No header with name "${name}".\nChoices are [\n\t${names}\n]`);
-  }
-
-  return header.value;
-}
