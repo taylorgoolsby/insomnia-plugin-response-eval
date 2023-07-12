@@ -116,10 +116,7 @@ module.exports.templateTags = [
 
       if (shouldResend && context.renderPurpose === 'send') {
         console.log('[response eval] Resending dependency');
-        requestChain.push(request._id)
-        response = await context.network.sendRequest(request, [
-          { name: 'requestChain', value: requestChain }
-        ]);
+        response = await context.network.sendRequest(request);
       }
 
       const response = await context.util.models.response.getLatestForRequestId(id);
