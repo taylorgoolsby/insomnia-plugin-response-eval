@@ -71,8 +71,9 @@ module.exports.templateTags = [
       }
     ],
 
-    async run(context, field, id, filter, js) {
+    async run(context, field, id, filter, resendBehavior, js) {
       filter = filter || '';
+      resendBehavior = (resendBehavior || defaultTriggerBehaviour).toLowerCase();
 
       if (!['header', 'raw'].includes(field)) {
         throw new Error(`Invalid response field ${field}`);
@@ -124,17 +125,17 @@ module.exports.templateTags = [
       const response = await context.util.models.response.getLatestForRequestId(id);
 
       if (!response) {
-        throw new Error('[response eval] No responses for request');
+        throw new Error('No responses for request');
       }
 
       if (!response.statusCode) {
-        throw new Error('[response eval] No successful responses for request');
+        throw new Error('No successful responses for request');
       }
 
       const sanitizedFilter = filter.trim();
 
       if (field === 'header' && !sanitizedFilter) {
-        throw new Error(`[response eval] No ${field} filter specified`);
+        throw new Error(`No ${field} filter specified`);
       }
 
       let output = ''
@@ -149,19 +150,19 @@ module.exports.templateTags = [
         try {
           output = iconv.decode(bodyBuffer, charset);
         } catch (err) {
-          console.warn('[[response eval]] Failed to decode body', err);
+          console.warn('[response eval] Failed to decode body', err);
           output = bodyBuffer.toString();
         }
       } else {
-        throw new Error(`[response eval] Unknown field ${field}`);
+        throw new Error(`Unknown field ${field}`);
       }
 
       let r = output
       if (js) {
         try {
-          r = eval(js);
+          r = await eval(`(async () => { return ${js} })`)();
         } catch (err) {
-          throw new Error(`[response eval] Cannot eval: ${err.message}`);
+          throw new Error(`Cannot eval: ${err.message}`);
         }
       }
 
