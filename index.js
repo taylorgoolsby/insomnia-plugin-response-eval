@@ -1,5 +1,7 @@
 const iconv = require('iconv-lite');
 
+const defaultTriggerBehaviour = 'never';
+
 module.exports.templateTags = [
   {
     name: 'ResponseEval',
@@ -26,6 +28,34 @@ module.exports.templateTags = [
         displayName: 'Request',
         type: 'model',
         model: 'Request'
+      },
+      {
+        displayName: 'Trigger Behavior',
+        help: 'Configure when to resend the dependent request',
+        type: 'enum',
+        defaultValue: defaultTriggerBehaviour,
+        options: [
+          {
+            displayName: 'Never',
+            description: 'never resend request',
+            value: 'never',
+          },
+          {
+            displayName: 'No History',
+            description: 'resend when no responses present',
+            value: 'no-history',
+          },
+          {
+            displayName: 'When Expired',
+            description: 'resend when existing response has expired',
+            value: 'when-expired',
+          },
+          {
+            displayName: 'Always',
+            description: 'resend request when needed',
+            value: 'always',
+          },
+        ],
       },
       {
         type: 'string',
@@ -57,20 +87,54 @@ module.exports.templateTags = [
         throw new Error(`Could not find request ${id}`);
       }
 
+      let shouldResend = false;
+      switch (resendBehavior) {
+        case 'no-history':
+          shouldResend = !response;
+          break;
+
+        case 'when-expired':
+          if (!response) {
+            shouldResend = true;
+          } else {
+            const ageSeconds = (Date.now() - response.created) / 1000;
+            shouldResend = ageSeconds > maxAgeSeconds;
+          }
+          break;
+
+        case 'always':
+          shouldResend = true;
+          break;
+
+        case 'never':
+        default:
+          shouldResend = false;
+          break;
+
+      }
+
+      if (shouldResend && context.renderPurpose === 'send') {
+        console.log('[response eval] Resending dependency');
+        requestChain.push(request._id)
+        response = await context.network.sendRequest(request, [
+          { name: 'requestChain', value: requestChain }
+        ]);
+      }
+
       const response = await context.util.models.response.getLatestForRequestId(id);
 
       if (!response) {
-        throw new Error('No responses for request');
+        throw new Error('[response eval] No responses for request');
       }
 
       if (!response.statusCode) {
-        throw new Error('No successful responses for request');
+        throw new Error('[response eval] No successful responses for request');
       }
 
       const sanitizedFilter = filter.trim();
 
       if (field === 'header' && !sanitizedFilter) {
-        throw new Error(`No ${field} filter specified`);
+        throw new Error(`[response eval] No ${field} filter specified`);
       }
 
       let output = ''
@@ -85,11 +149,11 @@ module.exports.templateTags = [
         try {
           output = iconv.decode(bodyBuffer, charset);
         } catch (err) {
-          console.warn('[response] Failed to decode body', err);
+          console.warn('[[response eval]] Failed to decode body', err);
           output = bodyBuffer.toString();
         }
       } else {
-        throw new Error(`Unknown field ${field}`);
+        throw new Error(`[response eval] Unknown field ${field}`);
       }
 
       let r = output
@@ -97,7 +161,7 @@ module.exports.templateTags = [
         try {
           r = eval(js);
         } catch (err) {
-          throw new Error(`Cannot eval: ${err.message}`);
+          throw new Error(`[response eval] Cannot eval: ${err.message}`);
         }
       }
 
