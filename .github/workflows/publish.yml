@@ -4,11 +4,12 @@ on:
   push:
     tags:
       - "*"
+
 jobs:
   test:
     uses: ./.github/workflows/yarn.yml
 
-  publish:
+  npm-publish:
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -24,3 +25,19 @@ jobs:
       - run: yarn publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+  github-publish:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '20.x'
+          cache: yarn
+      - run: yarn --immutable
+      - run: yarn publish --access public 
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
