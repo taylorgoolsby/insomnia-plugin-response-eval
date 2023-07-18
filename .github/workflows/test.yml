@@ -13,8 +13,6 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: '19.x'
-          registry-url: 'https://registry.npmjs.org'
-          # Defaults to the user or organization that owns the workflow file
-          scope: '@energostalin'
-      - run: yarn
-      - run: yarn run test
+          cache: npm
+      - run: npm ci
+      - run: npm run test
