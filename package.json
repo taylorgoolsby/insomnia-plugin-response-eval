@@ -1,13 +1,13 @@
 {
-  "name": "insomnia-plugin-response-eval",
-  "version": "1.1.0",
-  "author": "Taylor Goolsby <taylorgoolsby@users.noreply.github.com>",
+  "name": "insomnia-plugin-response-js",
+  "version": "1.0.0",
+  "author": "Energostalin",
   "description": "Insomnia response template tag with JS eval",
   "license": "MIT",
-  "repository": "git@github.com:taylorgoolsby/insomnia-plugin-response-eval.git",
+  "repository": "git@github.com:EnergoStalin/insomnia-plugin-response-eval.git",
   "main": "index.js",
   "insomnia": {
-    "name": "response-eval",
+    "name": "response-js",
     "description": "Allows you to run JS on the output of the builtin response template tag."
   },
   "scripts": {
