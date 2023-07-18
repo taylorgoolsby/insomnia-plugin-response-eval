@@ -1,6 +1,6 @@
 {
   "name": "@energostalin/insomnia-plugin-response-js",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Energostalin",
   "description": "Insomnia response template tag with JS eval",
   "license": "MIT",
