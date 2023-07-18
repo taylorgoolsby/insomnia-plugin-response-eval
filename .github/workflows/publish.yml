@@ -7,7 +7,7 @@ on:
 
 jobs:
   test:
-    uses: ./.github/workflows/yarn.yml
+    uses: ./.github/workflows/test.yml
 
   npm-publish:
     needs: test
